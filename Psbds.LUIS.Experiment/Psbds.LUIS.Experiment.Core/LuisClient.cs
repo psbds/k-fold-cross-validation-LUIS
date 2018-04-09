@@ -1,4 +1,5 @@
 ﻿using Newtonsoft.Json;
+using Psbds.LUIS.Experiment.Core.Helpers;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -23,25 +24,17 @@ namespace Psbds.LUIS.Experiment.Core
         }
 
 
+        public async Task<String> ExportVersion(string applicationId, string applicationVersion)
+            => await SendGetRequest($"{API_URL}/{applicationId}/versions/{applicationVersion}/export");
 
         public async Task<String> ImportVersion(string applicationId, string version, object body)
-        {
-            var url = $"{API_URL}/{applicationId}/versions/import?versionId={version}";
-            Console.WriteLine($"Importing Application: {url}");
-
-            var response = await SendPostRequest(url, body);
-            Console.WriteLine($"Finished Importing Application: {url}");
-
-            return response;
-        }
+            => await SendPostRequest($"{API_URL}/{applicationId}/versions/import?versionId={version}", body);
 
         public async Task<String> TrainVersion(string applicationId, string version)
         {
             var url = $"{API_URL}/{applicationId}/versions/{version}/train";
-            Console.WriteLine($"Send Training Request Application: {url}");
 
             var response = await SendPostRequest(url, null);
-            Console.WriteLine($"Finished Send Training Request Application: {url}");
 
             return response;
         }
@@ -49,24 +42,17 @@ namespace Psbds.LUIS.Experiment.Core
         public async Task<String> GetVersionTrainingStatus(string applicationId, string version)
         {
             var url = $"{API_URL}/{applicationId}/versions/{version}/train";
-            Console.WriteLine($"Get Training Status: {url}");
 
             var response = await SendGetRequest(url);
-            Console.WriteLine($"Finished Get Training Status: {url}");
 
             return response;
         }
 
-
-
-
         public async Task<String> RunDataSetTest(string applicationId, string version, string dataSetId)
         {
             var url = $"{WEB_API_URL}/{applicationId}/versions/{version}/testdatasets/{dataSetId}/run";
-            Console.WriteLine($"Running Data Set: {url}");
             var response = await SendGetRequest(url);
 
-            Console.WriteLine($"Finished Running Data Se: {url}");
 
             return response;
         }
@@ -74,24 +60,11 @@ namespace Psbds.LUIS.Experiment.Core
         public async Task<String> CreateTestDataSet(string applicationId, string dataSetName, object body)
         {
             var url = $"{WEB_API_URL}/{applicationId}/testdatasets?dataSetName={dataSetName}";
-            Console.WriteLine($"Creating Data Set: {url}");
             var response = await SendPostRequest(url, body);
-            Console.WriteLine($"Finished Creating Data Set: {url}");
 
             return response;
         }
 
-        public async Task<String> ExportApplication(string applicationId, string applicationVersion)
-        {
-            var url = $"{API_URL}/{applicationId}/versions/{applicationVersion}/export";
-            Console.WriteLine($"Exporting Application: {url}");
-
-            var response = await SendGetRequest(url);
-
-            Console.WriteLine($"Finished Exporting Application: {url}");
-
-            return response;
-        }
 
 
         private async Task<String> SendGetRequest(string path)

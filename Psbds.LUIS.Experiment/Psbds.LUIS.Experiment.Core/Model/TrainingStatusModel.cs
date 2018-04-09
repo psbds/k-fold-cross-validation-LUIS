@@ -6,17 +6,17 @@ using System.Text;
 namespace Psbds.LUIS.Experiment.Core.Model
 {
     [Serializable]
-    public class VersionTrainingStatusModel
+    public class TrainingStatusModel
     {
         [JsonProperty("modelId")]
         public string ModelId { get; set; }
 
         [JsonProperty("details")]
-        public VersionTrainingStatusDetailsModel Details { get; set; }
+        public TrainingStatusDetailsModel Details { get; set; }
     }
 
     [Serializable]
-    public class VersionTrainingStatusDetailsModel
+    public class TrainingStatusDetailsModel
     {
 
         [JsonProperty("statusId")]
