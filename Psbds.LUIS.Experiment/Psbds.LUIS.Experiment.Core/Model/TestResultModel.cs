@@ -1,6 +1,7 @@
 ﻿using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 
 namespace Psbds.LUIS.Experiment.Core.Model
@@ -30,6 +31,24 @@ namespace Psbds.LUIS.Experiment.Core.Model
         [JsonProperty("intentPredictions")]
         public TestResultIntentModel[] IntentPredictions { get; set; }
 
+
+        [JsonIgnore]
+        public TestResultIntentModel FirstIntent
+        {
+            get
+            {
+                return IntentPredictions.OrderByDescending(y => y.Score).FirstOrDefault();
+            }
+        }
+
+        [JsonIgnore]
+        public TestResultIntentModel SecondIntent
+        {
+            get
+            {
+                return IntentPredictions.OrderByDescending(y => y.Score).Skip(1).FirstOrDefault();
+            }
+        }
     }
 
     [Serializable]
