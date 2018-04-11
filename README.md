@@ -18,3 +18,8 @@ K-fold cross-validation for LUIS Models (https://en.wikipedia.org/wiki/Cross-val
         * Nº of Confusions;Intent;Confusion Intents(Count)
    3. The Utterances File
         * Correct;Utterance;Expected Intent;FirstIntent;Second Intent
+
+### Limitations
+
+The current limitation is 5000 utterances per workspace
+
