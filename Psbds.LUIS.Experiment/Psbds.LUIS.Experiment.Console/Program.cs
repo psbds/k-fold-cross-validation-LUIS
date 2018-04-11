@@ -16,21 +16,52 @@ namespace Psbds.LUIS.Experiment.Console
 {
     class Program
     {
+        public static string appId;
+        public static string appKey;
+        public static string appVersion;
+        public static string directory;
+
         static void Main(string[] args)
         {
-            var applicationId = "";
-            var applicationKey = "";
+            AskInformation(ref appId, "Please provide your application id or EXIT:");
+            AskInformation(ref appKey, "Please provide your application key or EXIT:");
+            AskInformation(ref appVersion, "Please provide your app version or EXIT:");
+            AskInformation(ref directory, "Please provide your directory for saving the files or EXIT:");
 
+            var experiment = new Core.Experiment(appKey);
 
-            var experiment = new Core.Experiment(applicationKey, applicationId);
             var stopWatch = new Stopwatch();
             stopWatch.Start();
-            var t = experiment.RunExperiment().Result;
+
+            var experimentResults = experiment.RunExperiment(appId, appVersion).Result;
+
             stopWatch.Stop();
+
+            var count = 0;
+            foreach (var res in experimentResults)
+            {
+                var wrongUtterances = res.Where(x => x.intentLabel != x.IntentPredictions.OrderByDescending(y => y.Score).FirstOrDefault().Name);
+                var rightUtterances = res.Where(x => x.intentLabel == x.IntentPredictions.OrderByDescending(y => y.Score).FirstOrDefault().Name);
+                ColoredConsole.WriteLine($"Test Results for test {count}: Accuracy: {((double)rightUtterances.Count() / (double)res.Count()) * 100}%. {rightUtterances.Count()} Right, {wrongUtterances.Count()} Wrong.", ConsoleColor.Cyan);
+                count++;
+            }
 
             ColoredConsole.WriteLine($"Experiment Run in {stopWatch.Elapsed.TotalSeconds} Seconds.", ConsoleColor.Green);
             System.Console.Read();
 
         }
+
+        public static void AskInformation(ref string value, string phrase)
+        {
+            System.Console.WriteLine(phrase);
+            value = System.Console.ReadLine();
+            if (value.ToUpper() == "EXIT")
+            {
+                throw new ArgumentException();
+            }
+            if (String.IsNullOrEmpty(value))
+                AskInformation(ref value, phrase);
+        }
+
     }
 }

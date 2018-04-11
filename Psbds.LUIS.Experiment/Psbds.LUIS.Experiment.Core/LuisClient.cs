@@ -23,6 +23,11 @@ namespace Psbds.LUIS.Experiment.Core
             _applicationKey = applicationKey;
         }
 
+        public async Task<String> CreateApplication(object body)
+           => await SendPostRequest($"{API_URL}", body);
+
+        public async Task<String> DeleteApplication(string applicationId)
+         => await SendDeleteRequest($"{API_URL}/{applicationId}");
 
         public async Task<String> ExportVersion(string applicationId, string applicationVersion)
             => await SendGetRequest($"{API_URL}/{applicationId}/versions/{applicationVersion}/export");
@@ -31,39 +36,16 @@ namespace Psbds.LUIS.Experiment.Core
             => await SendPostRequest($"{API_URL}/{applicationId}/versions/import?versionId={version}", body);
 
         public async Task<String> TrainVersion(string applicationId, string version)
-        {
-            var url = $"{API_URL}/{applicationId}/versions/{version}/train";
-
-            var response = await SendPostRequest(url, null);
-
-            return response;
-        }
+            => await SendPostRequest($"{API_URL}/{applicationId}/versions/{version}/train", null);
 
         public async Task<String> GetVersionTrainingStatus(string applicationId, string version)
-        {
-            var url = $"{API_URL}/{applicationId}/versions/{version}/train";
-
-            var response = await SendGetRequest(url);
-
-            return response;
-        }
+            => await SendGetRequest($"{API_URL}/{applicationId}/versions/{version}/train");
 
         public async Task<String> RunDataSetTest(string applicationId, string version, string dataSetId)
-        {
-            var url = $"{WEB_API_URL}/{applicationId}/versions/{version}/testdatasets/{dataSetId}/run";
-            var response = await SendGetRequest(url);
-
-
-            return response;
-        }
+            => await SendGetRequest($"{WEB_API_URL}/{applicationId}/versions/{version}/testdatasets/{dataSetId}/run");
 
         public async Task<String> CreateTestDataSet(string applicationId, string dataSetName, object body)
-        {
-            var url = $"{WEB_API_URL}/{applicationId}/testdatasets?dataSetName={dataSetName}";
-            var response = await SendPostRequest(url, body);
-
-            return response;
-        }
+            => await SendPostRequest($"{WEB_API_URL}/{applicationId}/testdatasets?dataSetName={dataSetName}", body);
 
 
 
@@ -74,6 +56,22 @@ namespace Psbds.LUIS.Experiment.Core
                 httpClient.DefaultRequestHeaders.Add("Ocp-Apim-Subscription-Key", this._applicationKey);
                 httpClient.BaseAddress = new Uri(BASE_URL);
                 var result = await httpClient.GetAsync(path);
+                var content = await result.Content.ReadAsStringAsync();
+                if (!result.IsSuccessStatusCode)
+                {
+                    throw new Exception(content);
+                }
+                return content;
+            }
+        }
+
+        private async Task<String> SendDeleteRequest(string path)
+        {
+            using (var httpClient = new HttpClient())
+            {
+                httpClient.DefaultRequestHeaders.Add("Ocp-Apim-Subscription-Key", this._applicationKey);
+                httpClient.BaseAddress = new Uri(BASE_URL);
+                var result = await httpClient.DeleteAsync(path);
                 var content = await result.Content.ReadAsStringAsync();
                 if (!result.IsSuccessStatusCode)
                 {

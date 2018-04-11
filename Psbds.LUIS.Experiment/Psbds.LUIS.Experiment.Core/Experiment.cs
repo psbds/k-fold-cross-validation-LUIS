@@ -13,99 +13,88 @@ namespace Psbds.LUIS.Experiment.Core
 {
     public class Experiment
     {
-        private readonly string applicationId;
-        private readonly string applicationKey;
-        private readonly LuisClient luisClient;
+        private string _applicationId;
+        private readonly string _applicationKey;
+        private readonly LuisClient _luisClient;
 
-        public Experiment(string applicationKey, string applicationId)
+        public Experiment(string applicationKey)
         {
-            this.applicationId = applicationId;
-            this.applicationKey = applicationKey;
-            this.luisClient = new LuisClient(applicationKey);
+            this._applicationKey = applicationKey;
+            this._luisClient = new LuisClient(applicationKey);
         }
 
-        public async Task<string> RunExperiment(int numberOfFolds = 5)
+        public async Task<List<TestResultModel[]>> RunExperiment(string applicationId, string versionId, int numberOfFolds = 5)
         {
-            Console.Write($"Downloading Application Version: ");
-
-            var applicationVersion = (await luisClient.ExportVersion(applicationId, "0.2")).DeserializeObject<ApplicationVersionModel>();
-
-            ColoredConsole.WriteLine("Success", ConsoleColor.Green);
-
-
-            var folds = this.SeparateFolds(applicationVersion, numberOfFolds);
-
-            var tasks = new List<TestModel>();
-            var index = 0;
-            foreach (var fold in folds)
+            try
             {
-                var testItem = new TestModel
+                Console.Write($"Downloading Application Version: ");
+
+                var applicationVersion = (await _luisClient.ExportVersion(applicationId, versionId)).DeserializeObject<ApplicationVersionModel>();
+
+                ColoredConsole.WriteLine("Success", ConsoleColor.Green);
+
+                Console.Write($"Creating Experiment Application: ");
+
+                _applicationId = await this.CreateApplication(applicationVersion.Name, applicationVersion.Culture);
+
+                ColoredConsole.WriteLine("Success", ConsoleColor.Green);
+
+                var folds = this.SeparateFolds(applicationVersion, numberOfFolds);
+
+                var tasks = new List<Task<string>>();
+                var index = 1;
+                foreach (var fold in folds)
                 {
-                    VersionId = Guid.NewGuid().ToString().Substring(0, 5) + index
-                };
+                    tasks.Add(Task.Run(async () => await RunExperiment(applicationVersion, fold, index++)));
+                }
 
-                testItem.ImportingTask = Task
-                    .Run(async () =>
-                    {
-                        Console.WriteLine($"Uploading Version: {testItem.VersionId}");
-
-                        await ImportFoldVersion(applicationVersion, fold, testItem.VersionId);
-
-                        ColoredConsole.WriteLine($"Success Uploading Version: {testItem.VersionId}", ConsoleColor.Green);
-
-                        Console.WriteLine($"Training Version: {testItem.VersionId}");
-
-                        await luisClient.TrainVersion(applicationId, testItem.VersionId);
-
-                        var isTrained = false;
-                        while (!isTrained)
-                        {
-                            var result = await luisClient.GetVersionTrainingStatus(applicationId, testItem.VersionId);
-                            var resultObject = JsonConvert.DeserializeObject<TrainingStatusModel[]>(result);
-                            if (resultObject.All(x => x.Details.StatusId == 0 || x.Details.StatusId == 1))
-                            {
-                                isTrained = true;
-                            }
-                            Console.WriteLine($"Version  {testItem.VersionId} is Training. Sleeping for 10 seconds", ConsoleColor.Magenta);
-                            Thread.Sleep(10000);
-                        }
-
-                        ColoredConsole.WriteLine($"Success Training Version: {testItem.VersionId}", ConsoleColor.Green);
-
-                    });
+                Task.WaitAll(tasks.ToArray());
 
 
-                testItem.CreatingDataSetTask = Task.Run(async () =>
-                {
-                    var testId = await luisClient.CreateTestDataSet(applicationId, testItem.VersionId, fold.TestSet.ToArray());
-                    testItem.TestId = Regex.Replace(testId, "\"", "");
-                });
 
-                tasks.Add(testItem);
-                index++;
+                return tasks.Select(x => x.Result.DeserializeObject<TestResultModel[]>()).ToList();
             }
-
-
-            var importingTasks = tasks.Select(x => x.ImportingTask).ToArray();
-            var dataSetTasks = tasks.Select(x => x.CreatingDataSetTask).ToArray();
-
-            Task.WaitAll(importingTasks);
-            Task.WaitAll(dataSetTasks);
-
-            var runTestTasks = tasks.Select(test => Task.Run(() => luisClient.RunDataSetTest(applicationId, test.VersionId, test.TestId).Result)).ToArray();
-
-            Task.WaitAll(runTestTasks);
-
-            var count = 0;
-            foreach (var test in runTestTasks)
+            finally
             {
-                var res = test.Result.DeserializeObject<TestResultModel[]>();
-                var wrongUtterances = res.Where(x => x.intentLabel != x.IntentPredictions.OrderByDescending(y => y.Score).FirstOrDefault().Name);
-                var rightUtterances = res.Where(x => x.intentLabel == x.IntentPredictions.OrderByDescending(y => y.Score).FirstOrDefault().Name);
-                ColoredConsole.WriteLine($"Test Results for test {count}: Accuracy: {((double)rightUtterances.Count() / (double)res.Count()) * 100}%. {rightUtterances.Count()} Right, {wrongUtterances.Count()} Wrong.", ConsoleColor.Cyan);
-                count++;
+                if (!string.IsNullOrEmpty(_applicationId))
+                {
+                    Console.Write($"Deleting Experiment Application: ");
+
+                    await this._luisClient.DeleteApplication(_applicationId);
+
+                    ColoredConsole.WriteLine("Success", ConsoleColor.Green);
+                }
             }
-            return "a";
+        }
+
+        private async Task<string> RunExperiment(ApplicationVersionModel applicationVersion, FoldModel fold, int index)
+        {
+            var versionId = Guid.NewGuid().ToString().Substring(0, 5) + index;
+
+            try
+            {
+                Console.WriteLine($"Uploading Version: {index}");
+
+                await ImportFoldVersion(applicationVersion, fold, versionId);
+
+                ColoredConsole.WriteLine($"Success Uploading Version: {index}", ConsoleColor.Green);
+
+                Console.WriteLine($"Training Version: {index}");
+
+                await _luisClient.TrainVersion(_applicationId, versionId);
+
+                await this.WaitForTraining(versionId);
+
+                ColoredConsole.WriteLine($"Success Training Version: {versionId}", ConsoleColor.Green);
+
+                var testId = (await _luisClient.CreateTestDataSet(_applicationId, versionId, fold.TestSet.ToArray())).DeserializeObject<string>();
+
+                return await _luisClient.RunDataSetTest(_applicationId, versionId, testId);
+            }
+            catch (Exception e)
+            {
+                throw;
+            }
         }
 
         #region [ Creating Folds ]
@@ -114,9 +103,9 @@ namespace Psbds.LUIS.Experiment.Core
         {
             var folds = CreateFolds(numberOfFolds);
 
-            var utterancesByIntent = ExtractUtterancesForFolds(model, 0);
+            var utterancesByIntent = ExtractUtterancesForFolds(model, 0).OrderBy(x => new Guid().ToString());
 
-            var values = utterancesByIntent.SelectMany(x => x).Split(numberOfFolds);
+            var values = utterancesByIntent.Split(numberOfFolds);
             for (var i = 0; i < numberOfFolds; i++)
             {
                 var fold = folds[i];
@@ -127,34 +116,12 @@ namespace Psbds.LUIS.Experiment.Core
             return folds;
         }
 
-        /*    private List<FoldModel> SeparateFolds(ApplicationVersionModel model, int numberOfFolds)
-            {
-                var folds = CreateFolds(numberOfFolds);
-
-                var utterancesByIntent = ExtractUtterancesForFolds(model, numberOfFolds);
-
-                foreach (var utteranceGroup in utterancesByIntent)
-                {
-                    var values = utteranceGroup.Split(numberOfFolds).ToArray();
-
-                    for (var i = 0; i < numberOfFolds; i++)
-                    {
-                        var fold = folds[i];
-                        fold.TestSet.AddRange(values[i].ToList());
-
-                        folds.Where(x => x != fold).ToList().ForEach(x => x.TrainingSet.AddRange(values[i]));
-                    }
-                }
-
-                return folds;
-            }*/
-
-        private IEnumerable<IGrouping<string, ApplicationVersionUtteranceModel>> ExtractUtterancesForFolds(ApplicationVersionModel model, int ignoreLessThan)
+        private IEnumerable<ApplicationVersionUtteranceModel> ExtractUtterancesForFolds(ApplicationVersionModel model, int ignoreLessThan)
         {
             var utterancesByIntent = new List<ApplicationVersionUtteranceModel>(model.Utterances).GroupBy(x => x.Intent);
             utterancesByIntent.Where(x => x.Count() < ignoreLessThan).ToList().ForEach(x => Console.WriteLine($"Ignored Intent #{x.Key}: {x.Count()} Values"));
             utterancesByIntent = utterancesByIntent.Where(x => x.Count() >= ignoreLessThan);
-            return utterancesByIntent;
+            return utterancesByIntent.SelectMany(x => x);
         }
 
         private List<FoldModel> CreateFolds(int numberOfFolds)
@@ -174,7 +141,7 @@ namespace Psbds.LUIS.Experiment.Core
             var foldVersion = applicationVersion.DeepClone();
             foldVersion.Utterances = fold.TrainingSet.ToArray();
             foldVersion.Intents = foldVersion.Intents.Where(x => foldVersion.Utterances.Any(y => y.Intent == x.Name)).ToArray();
-            var response = await luisClient.ImportVersion(this.applicationId, versionName, foldVersion);
+            var response = await _luisClient.ImportVersion(_applicationId, versionName, foldVersion);
             return response;
         }
 
@@ -183,15 +150,34 @@ namespace Psbds.LUIS.Experiment.Core
             var isTrained = false;
             while (!isTrained)
             {
-                var result = await luisClient.GetVersionTrainingStatus(applicationId, versionId);
-                var resultObject = JsonConvert.DeserializeObject<TrainingStatusModel[]>(result);
-                if (resultObject.All(x => x.Details.StatusId == 0 || x.Details.StatusId == 2))
-                {
-                    isTrained = true;
-                }
-                Console.WriteLine("Sleeping for 10 seconds");
+                isTrained = await this.IsVersionTrained(versionId);
+                if (isTrained)
+                    break;
+
+                Console.WriteLine($"Version {versionId} is Training. Sleeping for 10 seconds", ConsoleColor.Magenta);
                 Thread.Sleep(10000);
             }
+        }
+
+        private async Task<bool> IsVersionTrained(string versionId)
+        {
+            var result = await _luisClient.GetVersionTrainingStatus(_applicationId, versionId);
+            var resultObject = JsonConvert.DeserializeObject<TrainingStatusModel[]>(result);
+            return resultObject.All(x => x.Details.StatusId == 0 || x.Details.StatusId == 1);
+        }
+
+        private async Task<string> CreateApplication(string name, string language)
+        {
+            var response = await this._luisClient.CreateApplication(new
+            {
+                name = $"Experiment-{name}-{Guid.NewGuid().ToString().Substring(0, 5)}",
+                description = $"Experiment-{name}-{new Guid().ToString()}",
+                culture = language,
+                usageScenario = "",
+                domain = "",
+                initialVersionId = "1.0"
+            });
+            return response.DeserializeObject<string>();
         }
     }
 
