@@ -1,4 +1,5 @@
 ﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Psbds.LUIS.Experiment.Core;
 using Psbds.LUIS.Experiment.Core.Helpers;
 using Psbds.LUIS.Experiment.Core.Model;
@@ -34,7 +35,9 @@ namespace Psbds.LUIS.Experiment.Console
             var stopWatch = new Stopwatch();
             stopWatch.Start();
 
+
             var experimentResults = experiment.RunExperiment(appId, appVersion).Result;
+
 
             stopWatch.Stop();
 
@@ -44,40 +47,23 @@ namespace Psbds.LUIS.Experiment.Console
             var utterancesFile = new StringBuilder();
             utterancesFile.AppendLine("correct;utterance;expected_intent;first_intent;second_intent");
             var accuracies = new List<double>();
-            var confusionMatrix = new List<ConfusionMatrixModel>();
             foreach (var result in experimentResults)
             {
                 var resultList = result.ToList();
-                var wrongUtterancesCount = resultList.Where(x => x.intentLabel != x.IntentPredictions.OrderByDescending(y => y.Score).FirstOrDefault().Name).Count();
-                var rightUtterancesCount = resultList.Where(x => x.intentLabel == x.IntentPredictions.OrderByDescending(y => y.Score).FirstOrDefault().Name).Count();
-                var accuracy = ((double)rightUtterancesCount / (double)resultList.Count()) * 100;
-                accuracies.Add(accuracy);
-                ColoredConsole.WriteLine($"Test Results for test {count}: Accuracy: {accuracy.ToString("F2")}%. {rightUtterancesCount} Right, {wrongUtterancesCount} Wrong.", ConsoleColor.Cyan);
+
+                ColoredConsole.WriteLine($"Test Results for test {count}:", ConsoleColor.Green);
+                ColoredConsole.WriteLine($"\t Accuracy Intent 1        : {result.AccuracyOnFirstIntent().ToString("F2")}%.", ConsoleColor.Cyan);
+                ColoredConsole.WriteLine($"\t Accuracy Intent 1/2      : {result.AccuracyUntilSecondtIntent().ToString("F2")}%.", ConsoleColor.Cyan);
+                ColoredConsole.WriteLine($"\t Accuracy Intent 1/2/3    : {result.AccuracyUntilThirdIntent().ToString("F2")}%.", ConsoleColor.Cyan);
+                ColoredConsole.WriteLine($"\t Accuracy Intent 1/2/3/4  : {result.AccuracyUntilForthIntent().ToString("F2")}%.", ConsoleColor.Cyan);
+                ColoredConsole.WriteLine($"\t Accuracy Intent 1/2/3/4/5: {result.AccuracyUntilFifthIntent().ToString("F2")}%.", ConsoleColor.Cyan);
 
                 resultList.ForEach(utterance =>
                 {
-                    var isCorrect = utterance.intentLabel == utterance.FirstIntent.Name;
-                    if (!isCorrect)
-                    {
-                        var confusionModel = confusionMatrix.FirstOrDefault(x => x.IntentName == utterance.intentLabel);
-                        if (confusionModel == null)
-                        {
-                            confusionModel = new ConfusionMatrixModel(utterance.intentLabel);
-                            confusionMatrix.Add(confusionModel);
-                        }
-                        var confusion = confusionModel.Confusions.FirstOrDefault(x => x.IntentName == utterance.FirstIntent.Name);
-                        if (confusion == null)
-                        {
-                            confusion = new ConfusionMatrixItemModel(utterance.FirstIntent.Name);
-                            confusionModel.Confusions.Add(confusion);
-                        }
-                        confusion.Count++;
-                    }
-
                     utterancesFile.AppendLine($"" +
-                        $"{isCorrect};" +
+                        $"{utterance.IsCorrect};" +
                         $"{utterance.Text};" +
-                        $"{utterance.intentLabel};" +
+                        $"{utterance.IntentLabel};" +
                         $"{utterance.FirstIntent.Name}({utterance.FirstIntent.Score});" +
                         $"{utterance.SecondIntent.Name}({utterance.SecondIntent.Score});");
                 });
@@ -85,8 +71,28 @@ namespace Psbds.LUIS.Experiment.Console
                 count++;
             }
 
-            ColoredConsole.WriteLine($"Average Accuracy Result: {(accuracies.Sum() / accuracies.Count()).ToString("F2")}%", ConsoleColor.Cyan);
+            ColoredConsole.WriteLine($"Average Accuracy", ConsoleColor.Green);
+            ColoredConsole.WriteLine($"\t Accuracy Intent 1        : {(experimentResults.Sum(x => x.AccuracyOnFirstIntent()) / experimentResults.Count()).ToString("F2")}%.", ConsoleColor.Cyan);
+            ColoredConsole.WriteLine($"\t Accuracy Intent 1/2      : {(experimentResults.Sum(x => x.AccuracyUntilSecondtIntent()) / experimentResults.Count()).ToString("F2")}%.", ConsoleColor.Cyan);
+            ColoredConsole.WriteLine($"\t Accuracy Intent 1/2/3    : {(experimentResults.Sum(x => x.AccuracyUntilThirdIntent()) / experimentResults.Count()).ToString("F2")}%.", ConsoleColor.Cyan);
+            ColoredConsole.WriteLine($"\t Accuracy Intent 1/2/3/4  : {(experimentResults.Sum(x => x.AccuracyUntilForthIntent()) / experimentResults.Count()).ToString("F2")}%.", ConsoleColor.Cyan);
+            ColoredConsole.WriteLine($"\t Accuracy Intent 1/2/3/4/5: {(experimentResults.Sum(x => x.AccuracyUntilFifthIntent()) / experimentResults.Count()).ToString("F2")}%.", ConsoleColor.Cyan);
 
+            var confusionMatrix = experiment.CreateConfusionMatrix(experimentResults);
+
+            WriteConfusionHtmlFile(experimentResults, confusionMatrix);
+
+            WriteConfusionFile(confusionMatrix);
+
+            WriteUtterancesFile(utterancesFile.ToString());
+
+            ColoredConsole.WriteLine($"Experiment Run in {stopWatch.Elapsed.TotalSeconds} Seconds.", ConsoleColor.Green);
+            System.Console.Read();
+
+        }
+
+        private static void WriteConfusionFile(List<ConfusionMatrixModel> confusionMatrix)
+        {
             var confusionFile = new StringBuilder();
             confusionFile.AppendLine("confusion_count;intent;confusions");
             foreach (var intent in confusionMatrix.OrderByDescending(x => x.Confusions.Count))
@@ -99,26 +105,81 @@ namespace Psbds.LUIS.Experiment.Console
                 confusionFile.AppendLine(line);
             }
 
-            WriteConfusionFile(confusionFile.ToString());
-            WriteUtterancesFile(utterancesFile.ToString());
-
-            ColoredConsole.WriteLine($"Experiment Run in {stopWatch.Elapsed.TotalSeconds} Seconds.", ConsoleColor.Green);
-            System.Console.Read();
-
-        }
-
-
-        private static void WriteConfusionFile(string confusionFile)
-        {
-            using (var writer = new StreamWriter($"{directory}/ConfusionMatrix-{DateTime.Now.ToString().Replace(":", "-")}.csv", false, Encoding.UTF8))
+            using (var writer = new StreamWriter($"{directory}/ConfusionMatrix-{DateTime.Now.ToString().CleanFileName()}.csv", false, Encoding.UTF8))
             {
                 writer.Write(confusionFile);
             }
         }
 
+
+        private static void WriteConfusionHtmlFile(List<TestResultModel[]> experimentResults, List<ConfusionMatrixModel> confusionMatrix)
+        {
+            var applicationModel = experimentResults.SelectMany(x => x);
+
+
+            var templateFilePath = Path.Combine(AppContext.BaseDirectory, "templates", "results.html");
+            string templateFile = File.ReadAllText(templateFilePath, Encoding.UTF8);
+
+
+            var maxConfusions = confusionMatrix.Max(x => x.Confusions.Count);
+
+            var confusionColumns = new StringBuilder();
+            var confusionHeaders = new StringBuilder();
+            for (var i = 0; i < maxConfusions; i++)
+            {
+                confusionHeaders.AppendLine($"<th style='width:150px !important;'>intent_{i + 1}</th>");
+                confusionColumns.AppendLine(JsonConvert.SerializeObject(new { data = $"intent_{i + 1}" }) + ",");
+            }
+            templateFile = templateFile.Replace("#CONFUSION_COLUMNS#", confusionColumns.ToString());
+            templateFile = templateFile.Replace("#CONFUSION_HEADERS#", confusionHeaders.ToString());
+
+            Func<ConfusionMatrixItemUtteranceModel, string> FormatUtterance = (item) =>
+             {
+                 var words = item.Text.Split(' ');
+                 var apperances = item.ApperancesInModel(applicationModel.Where(x => x.IntentLabel == item.Intent).Select(x => x.Text).ToList(), item.Intent);
+                 var phrase = String.Join(" ", words.Select(word =>
+                 {
+                     if (apperances.ContainsKey(word))
+                     {
+                         var color = apperances[word] <= 1 ? "style='color: orange;'" : "";
+                         return $"<span data-toggle='tooltip' {color} data-placement='bottom' title='{apperances[word]} Occurence'>{word}</span>";
+                     }
+                     else
+                     {
+                         return word;
+                     }
+                 }));
+                 phrase += $"({item.Score})";
+                 return phrase;
+             };
+
+            var data = confusionMatrix.Select(x =>
+            {
+                JObject model = new JObject();
+                model["id"] = x.IntentName;
+                model["confusions"] = x.Confusions.Sum(y => y.Count);
+                model["expected_intent"] = x.IntentName;
+                var orderedConfusions = x.Confusions.OrderByDescending(c => c.Count).ToList();
+                for (var i = 0; i < maxConfusions; i++)
+                {
+                    var examples = new JArray(orderedConfusions.Count > i ? orderedConfusions[i].Utterances.Select(FormatUtterance).ToArray() : new string[] { });
+                    model.Add("examples_intent_" + (i + 1), examples);
+                    model["intent_" + (i + 1)] = orderedConfusions.Count > i ? $"{orderedConfusions[i].IntentName} ({orderedConfusions[i].Count})" : "-";
+                }
+
+                return model;
+            });
+
+            templateFile = templateFile.Replace("#DATA#", JsonConvert.SerializeObject(data));
+            using (var writer = new StreamWriter($"{directory}/ConfusionMatrix-{DateTime.Now.ToString().CleanFileName()}.html", false, Encoding.UTF8))
+            {
+                writer.Write(templateFile);
+            }
+        }
+
         private static void WriteUtterancesFile(string utterancesFile)
         {
-            using (var writer = new StreamWriter($"{directory}/ExperimentResults-{DateTime.Now.ToString().Replace(":", "-")}.csv", false, Encoding.UTF8))
+            using (var writer = new StreamWriter($"{directory}/ExperimentResults-{DateTime.Now.ToString().CleanFileName()}.csv", false, Encoding.UTF8))
             {
                 writer.Write(utterancesFile);
             }

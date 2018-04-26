@@ -54,6 +54,11 @@ namespace Psbds.LUIS.Experiment.Core
 
                 return tasks.Select(x => x.Result.DeserializeObject<TestResultModel[]>()).ToList();
             }
+            catch (Exception e)
+            {
+                ColoredConsole.WriteLine(e.Message, ConsoleColor.Red);
+                throw;
+            }
             finally
             {
                 if (!string.IsNullOrEmpty(_applicationId))
@@ -64,7 +69,40 @@ namespace Psbds.LUIS.Experiment.Core
 
                     ColoredConsole.WriteLine("Success", ConsoleColor.Green);
                 }
+                this._luisClient.Dispose();
             }
+        }
+
+        public List<ConfusionMatrixModel> CreateConfusionMatrix(List<TestResultModel[]> foldResults)
+        {
+            var confusionMatrix = new List<ConfusionMatrixModel>();
+
+            foreach (var testResults in foldResults)
+            {
+                foreach (var utterance in testResults.Where(x => !x.IsCorrect))
+                {
+                    var confusionModel = confusionMatrix.FirstOrDefault(x => x.IntentName == utterance.IntentLabel);
+                    if (confusionModel == null)
+                    {
+                        confusionModel = new ConfusionMatrixModel(utterance.IntentLabel);
+                        confusionMatrix.Add(confusionModel);
+                    }
+                    var confusion = confusionModel.Confusions.FirstOrDefault(x => x.IntentName == utterance.FirstIntent.Name);
+                    if (confusion == null)
+                    {
+                        confusion = new ConfusionMatrixItemModel(utterance.FirstIntent.Name);
+                        confusionModel.Confusions.Add(confusion);
+                    }
+                    confusion.Utterances.Add(new ConfusionMatrixItemUtteranceModel(utterance.IntentLabel)
+                    {
+                        Text = utterance.Text,
+                        Score = utterance.FirstIntent.Score
+                    });
+                    confusion.Count++;
+                }
+            }
+
+            return confusionMatrix;
         }
 
         private async Task<string> RunExperiment(ApplicationVersionModel applicationVersion, FoldModel fold, int index)
@@ -93,6 +131,7 @@ namespace Psbds.LUIS.Experiment.Core
             }
             catch (Exception e)
             {
+                ColoredConsole.WriteLine(e.Message, ConsoleColor.Red);
                 throw;
             }
         }

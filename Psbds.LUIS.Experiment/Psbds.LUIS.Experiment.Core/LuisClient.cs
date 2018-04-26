@@ -10,17 +10,24 @@ using System.Threading.Tasks;
 
 namespace Psbds.LUIS.Experiment.Core
 {
-    public class LuisClient
+    public class LuisClient : IDisposable
     {
         private const string BASE_URL = "https://westus.api.cognitive.microsoft.com";
         private const string WEB_API_URL = "https://westus.api.cognitive.microsoft.com/luis/webapi/v2.0/apps";
         private const string API_URL = "https://westus.api.cognitive.microsoft.com/luis/api/v2.0/apps";
+        private readonly HttpClient httpClient = new HttpClient()
+        {
+            Timeout = new TimeSpan(0,  20, 0),
+            BaseAddress = new Uri(BASE_URL),
+        };
 
         private readonly string _applicationKey;
 
         public LuisClient(string applicationKey)
         {
             _applicationKey = applicationKey;
+            httpClient.BaseAddress = new Uri(BASE_URL);
+            httpClient.DefaultRequestHeaders.Add("Ocp-Apim-Subscription-Key", this._applicationKey);
         }
 
         public async Task<String> CreateApplication(object body)
@@ -51,43 +58,32 @@ namespace Psbds.LUIS.Experiment.Core
 
         private async Task<String> SendGetRequest(string path)
         {
-            using (var httpClient = new HttpClient())
+            var result = await httpClient.GetAsync(path);
+            var content = await result.Content.ReadAsStringAsync();
+            if (!result.IsSuccessStatusCode)
             {
-                httpClient.DefaultRequestHeaders.Add("Ocp-Apim-Subscription-Key", this._applicationKey);
-                httpClient.BaseAddress = new Uri(BASE_URL);
-                var result = await httpClient.GetAsync(path);
-                var content = await result.Content.ReadAsStringAsync();
-                if (!result.IsSuccessStatusCode)
-                {
-                    throw new Exception(content);
-                }
-                return content;
+                throw new Exception(content);
             }
+            return content;
+
         }
 
         private async Task<String> SendDeleteRequest(string path)
         {
-            using (var httpClient = new HttpClient())
+            var result = await httpClient.DeleteAsync(path);
+            var content = await result.Content.ReadAsStringAsync();
+            if (!result.IsSuccessStatusCode)
             {
-                httpClient.DefaultRequestHeaders.Add("Ocp-Apim-Subscription-Key", this._applicationKey);
-                httpClient.BaseAddress = new Uri(BASE_URL);
-                var result = await httpClient.DeleteAsync(path);
-                var content = await result.Content.ReadAsStringAsync();
-                if (!result.IsSuccessStatusCode)
-                {
-                    throw new Exception(content);
-                }
-                return content;
+                throw new Exception(content);
             }
+            return content;
+
         }
 
         private async Task<String> SendPostRequest(string path, object body)
         {
-            using (var httpClient = new HttpClient())
+            try
             {
-                httpClient.BaseAddress = new Uri(BASE_URL);
-                httpClient.DefaultRequestHeaders.Add("Ocp-Apim-Subscription-Key", this._applicationKey);
-
                 var json = JsonConvert.SerializeObject(body);
                 var result = await httpClient.PostAsync(path, new StringContent(json, Encoding.UTF8, "application/json"));
                 var content = await result.Content.ReadAsStringAsync();
@@ -96,8 +92,17 @@ namespace Psbds.LUIS.Experiment.Core
                     throw new Exception(content);
                 }
                 return content;
+
+            }
+            catch (Exception e)
+            {
+                throw e;
             }
         }
 
+        public void Dispose()
+        {
+            this.httpClient.Dispose();
+        }
     }
 }
