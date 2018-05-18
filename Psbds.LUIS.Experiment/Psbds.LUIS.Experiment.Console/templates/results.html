@@ -7,12 +7,14 @@
 
     <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.0/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-9gVQ4dYFwwWSjIDZnLEWnxCjeSWFphJiwGPXr1jddIhOegiu1FwO5qRGvFXOdJZ4" crossorigin="anonymous">
     <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/v/dt/dt-1.10.16/datatables.min.css" />
+    <link href="https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet" integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous">
 
     <script src="http://code.jquery.com/jquery-3.3.1.js" integrity="sha256-2Kok7MbOyxpgUVvAk/HJ2jigOSYS2auK4Pfzbm7uH60=" crossorigin="anonymous"></script>
     <script type="text/javascript" src="https://cdn.datatables.net/v/dt/dt-1.10.16/datatables.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.0/js/bootstrap.bundle.min.js" integrity="sha384-lZmvU/TzxoIQIOD9yQDEpvxp6wEU32Fy0ckUgOH4EIlMOCdR823rg4+3gWRwnX1M" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mark.js/8.11.1/jquery.mark.min.js"></script>
 </head>
-<body>
+<body style="padding:30px;">
     <div class="container-fluid">
         <h3>Experiment Results <hr /></h3>
         <table id="example" class="display" style="width:100%">
@@ -27,22 +29,37 @@
         </table>
     </div>
     <script>
+        var phrases = {};
+        function generateGuid() {
+            function s4() {
+                return Math.floor((1 + Math.random()) * 0x10000)
+                    .toString(16)
+                    .substring(1);
+            }
+            return s4() + s4() + '-' + s4() + '-' + s4() + '-' + s4() + '-' + s4() + s4() + s4();
+        }
         function format(d) {
-            $('[data-toggle="tooltip"]').tooltip();
-          var intentColumns = Object.keys(d).filter(function (i) { return i.startsWith("intent") });
+            var intentColumns = Object.keys(d).filter(function (i) { return i.startsWith("intent") });
 
             var htmlColumns = "";
             var htmlHeaders = "";
             for (var k in intentColumns) {
                 var key = intentColumns[k];
-                var rows = "-";
+                var rows = "";
+                var intentNameMatch = /(.*)\s\(/g.exec(d[key]);
+                var intentName = intentNameMatch ? intentNameMatch[1] : "";
                 for (var rk in d["examples_" + key]) {
-                    rows += d["examples_" + key][rk] + "<hr/>";
+
+                    var exampleData = d["examples_data_" + key][rk];
+                    var guid = generateGuid();
+                    phrases[guid] = exampleData;
+                    phrases[guid].Labeled = d["examples_" + key][rk];
+                    rows += "<div onClick='openComparison(\"" + d.expected_intent + "\",\"" + intentName + "\",\"" + guid + "\")'>" + d["examples_" + key][rk] + "</div><hr/>";
                 }
                 htmlColumns += "<td style='vertical-align: top'>" + rows + "</td>";
-                htmlHeaders += "<td style='vertical-align: top'>" + d[key] + "</td>"
+                htmlHeaders += "<td style='vertical-align: top''>" + d[key] + "</td>";
             }
-            var table = '<div style="    padding: 5px 0 5px 10px;    background-color: black;    font-size: small;"><table cellpadding="5" cellspacing="0" border="0" style="width:100%">' +
+            var table = '<div style="padding: 5px 0 5px 10px;background-color: black;font-size: small;"><table cellpadding="5" cellspacing="0" border="0" style="width:100%">' +
                 '<tr>' +
                 htmlHeaders +
                 '</tr>' +
@@ -50,6 +67,9 @@
                 htmlColumns
             '</tr>' +
                 '</table></div>';
+            setTimeout(function () {
+                $('[data-toggle="tooltip"]').tooltip();
+            }, 3000);
             return table;
         }
 
@@ -65,10 +85,10 @@
                     { "data": "confusions" },
                     { "data": "expected_intent" },
             #CONFUSION_COLUMNS#
-                                ],
+                                            ],
             "order": [[1, 'asc']],
             "data": #DATA#
-                            });
+                                        });
 
         // Add event listener for opening and closing details
         $('#example tbody').on('click', 'td.details-control', function () {
@@ -86,9 +106,60 @@
                 tr.addClass('shown');
             }
         });
+                    });
 
+        var intents = #INTENTS#;
 
-                        });
+        function openComparison(expected, found, guid) {
+            var data = phrases[guid];
+            var expecExamples = intents[expected];
+            var foundExamples = intents[found];
+            var table = $("<table class='table table-hover'><thead><tr><th>'" + expected + "' Examples</th><th>'" + found + "' Examples</th></tr></thead><tbody></tbody></table>");
+
+            for (var i = 0; i < expecExamples.length || i < foundExamples.length; i++) {
+                table.find("tbody").append("<tr><td>" + (expecExamples.length > i ? expecExamples[i] : "") + "</td><td>" + (foundExamples.length > i ? foundExamples[i] : "") + "</td></tr>")
+            }
+            $(".modal-comparison .modal-body").html("");
+            $(".modal-comparison .modal-body").append("<h5>" + data.Labeled + "</h5>");
+
+            for (var k in data.Intents) {
+                var intent = data.Intents[k];
+                $(".modal-comparison .modal-body").append("<small>" + intent.Intent + " - " + intent.Score + "<br/></small>");
+            }
+
+            $(".modal-comparison .modal-body").append("<br/>");
+            $(".modal-comparison .modal-body").append(table);
+            $(".modal-comparison").modal("show");
+            for (var k in data.TokenizedText) {
+                var word = data.TokenizedText[k];
+                $(".modal-comparison tbody").mark(word, { "accuracy": "exactly" });
+            }
+            $(".modal-comparison").modal("show");
+            setTimeout(function () {
+                $('[data-toggle="tooltip"]').tooltip();
+            },3000);
+        }
     </script>
+    <div class="modal modal-comparison" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Intent Comparison</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+
+
+
+
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

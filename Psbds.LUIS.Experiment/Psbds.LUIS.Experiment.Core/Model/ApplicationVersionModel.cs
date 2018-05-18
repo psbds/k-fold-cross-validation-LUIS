@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using Newtonsoft.Json;
 
@@ -36,6 +37,10 @@ namespace Psbds.LUIS.Experiment.Core.Model
         [JsonProperty("closedLists")]
         public ApplicationVersionEntityClosedListsModel[] EntitiesClosedList { get; set; }
 
+        [JsonProperty("prebuiltEntities")]
+        public object[] PrebuiltEntities { get; set; }
+
+
         [JsonProperty("bing_entities")]
         public string[] BingEntities { get; set; }
 
@@ -47,6 +52,26 @@ namespace Psbds.LUIS.Experiment.Core.Model
 
         [JsonProperty("utterances")]
         public ApplicationVersionUtteranceModel[] Utterances { get; set; }
+
+        [JsonIgnore]
+        private IEnumerable<IGrouping<string, ApplicationVersionUtteranceModel>> _utterancesByIntent;
+
+        [JsonIgnore]
+        public IEnumerable<IGrouping<string, ApplicationVersionUtteranceModel>> UtterancesByIntent
+        {
+            get
+            {
+                if (_utterancesByIntent == null)
+                {
+                    _utterancesByIntent = this.Utterances.GroupBy(x => x.Intent);
+                }
+                if(_utterancesByIntent == null)
+                {
+                    throw new Exception("");
+                }
+                return _utterancesByIntent;
+            }
+        }
 
     }
 

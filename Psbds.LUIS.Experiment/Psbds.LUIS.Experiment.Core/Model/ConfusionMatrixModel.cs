@@ -1,66 +1,162 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
 namespace Psbds.LUIS.Experiment.Core.Model
 {
-    public class ConfusionMatrixModel
+    public class ConfusionMatrixAnalysis
     {
-        public ConfusionMatrixModel(string intentName)
+
+        public static double FalsePositiveThreshold = 0.8;
+
+        public ConfusionMatrixAnalysis(ApplicationVersionModel applicationVersion)
         {
-            this.IntentName = intentName;
+            this.ApplicationVersion = applicationVersion;
         }
 
-        public string IntentName { get; set; }
+        public ApplicationVersionModel ApplicationVersion { get; private set; }
 
-        public List<ConfusionMatrixItemModel> Confusions { get; set; } = new List<ConfusionMatrixItemModel>();
+        public List<MatrixItem> MatrixItems { get; private set; } = new List<MatrixItem>();
+
     }
 
-    public class ConfusionMatrixItemModel
+    public class MatrixItem
     {
-        public ConfusionMatrixItemModel(string intentName)
+        public MatrixItem(ConfusionMatrixAnalysis matrixAnalysis, string expectedIntentName)
         {
-            this.IntentName = intentName;
+            this.MatrixAnalysis = matrixAnalysis;
+            this.ExpectedIntentName = expectedIntentName;
         }
-        public string IntentName { get; set; }
 
-        public List<ConfusionMatrixItemUtteranceModel> Utterances { get; set; } = new List<ConfusionMatrixItemUtteranceModel>();
+        public ConfusionMatrixAnalysis MatrixAnalysis { get; private set; }
 
-        public int Count { get; set; }
+        public string ExpectedIntentName { get; private set; }
+
+        public List<Confusion> Confusions { get; private set; } = new List<Confusion>();
+
     }
 
-    public class ConfusionMatrixItemUtteranceModel
+    [Serializable]
+    public class Confusion
     {
-        public ConfusionMatrixItemUtteranceModel(string intent)
+        internal Confusion(MatrixItem matrixItem, string confusedIntent)
         {
-            Intent = intent;
+            this.MatrixItem = matrixItem;
+            this.FoundIntent = confusedIntent;
         }
 
-        public string Intent { get; }
+        [JsonIgnore]
+        public MatrixItem MatrixItem { get; private set; }
 
-        public string Text { get; set; }
+        public string FoundIntent { get; private set; }
 
-        public double Score { get; set; }
+        public List<Utterance> Utterances { get; private set; } = new List<Utterance>();
 
+    }
 
-        public Dictionary<string, int> ApperancesInModel(List<string> list, string intentName)
+    [Serializable]
+    public class Utterance
+    {
+        public Utterance(Confusion confusion, string text, string[] tokenizedText, double score, List<UtteranceIntents> intents)
         {
-            var examples = list.Where(x => x != Text);
-            var records = new Dictionary<string, int>();
-            var characters = (Text == null ? "" : Text).Split(' ');
+            this.Confusion = confusion;
+            this.Text = text;
+            this.Score = score;
+            this.TokenizedText = tokenizedText;
+            this.Intents = intents;
+        }
 
-            characters.Distinct()
-                .ToList()
-                .ForEach(word =>
+        public Utterance()
+        {
+
+        }
+
+        [JsonIgnore]
+        public Confusion Confusion { get; private set; }
+
+        public string[] TokenizedText { get; private set; }
+
+        public string Text { get; private set; }
+
+        public double Score { get; private set; }
+
+        public List<UtteranceIntents> Intents { get; private set; } = new List<UtteranceIntents>();
+
+        [JsonIgnore]
+        public bool FalsePosiive { get { return Score >= ConfusionMatrixAnalysis.FalsePositiveThreshold; } }
+
+        [JsonIgnore]
+        private List<TokenizedAnalysis> _tokenizedAnalysis;
+
+        [JsonIgnore]
+        public List<TokenizedAnalysis> TokenizedAnalysis
+        {
+            get
+            {
+                if (_tokenizedAnalysis == null)
                 {
-                    var count = examples.Count(x => x.ToUpper().Contains(word.ToUpper()));
-                    records.Add(word, count);
-                });
+                    var examplesInExpectedIntent = this.Confusion.MatrixItem.MatrixAnalysis.ApplicationVersion.UtterancesByIntent.FirstOrDefault(x => x.Key == this.Confusion.MatrixItem.ExpectedIntentName);
+                    var examplesInFoundIntent = this.Confusion.MatrixItem.MatrixAnalysis.ApplicationVersion.UtterancesByIntent.FirstOrDefault(x => x.Key == this.Confusion.FoundIntent);
+                    var records = new List<TokenizedAnalysis>();
 
-            return records;
+                    var characters = (Text ?? "").Split(' ');
+                    characters.Distinct()
+                    .ToList()
+                    .ForEach(word =>
+                    {
+                        var a = this;
+                        var countInExpectedIntent = examplesInExpectedIntent.Count(x => x.Text.ToUpper().Contains(word.ToUpper()));
+                        var countInFoundIntent = examplesInFoundIntent != null ? examplesInFoundIntent.Count(x => x.Text.ToUpper().Contains(word.ToUpper())) : 0;
+                        var percentageInExpectedIntent = ((double)countInExpectedIntent / (double)examplesInExpectedIntent.Count()) * 100;
+                        var percentageInFoundIntent = ((double)countInFoundIntent / (double)(examplesInFoundIntent != null ? examplesInFoundIntent.Count() : 1)) * 100;
+                        records.Add(new TokenizedAnalysis(word, countInExpectedIntent, countInFoundIntent, percentageInExpectedIntent, countInFoundIntent));
+                    });
+
+                    _tokenizedAnalysis = records;
+                }
+                return _tokenizedAnalysis;
+            }
+        }
+    }
+
+    public class TokenizedAnalysis
+    {
+
+        public TokenizedAnalysis(string token, int apperancesInExpectedIntent, int apperancesInFoundIntent, double percentageInExpectedIntent, double percentageInFoundIntent)
+        {
+            this.Token = token;
+            this.ApperancesInExpectedIntent = apperancesInExpectedIntent;
+            this.ApperancesInFoundIntent = apperancesInFoundIntent;
+            this.PercentageInFoundIntent = percentageInFoundIntent;
+            this.PercentageInExpectedIntent = percentageInExpectedIntent;
         }
 
+        public string Token { get; private set; }
+
+        public int ApperancesInExpectedIntent { get; private set; }
+
+        public double PercentageInExpectedIntent { get; private set; }
+
+        public int ApperancesInFoundIntent { get; private set; }
+
+        public double PercentageInFoundIntent { get; private set; }
+
+    }
+
+    [Serializable]
+    public class UtteranceIntents
+    {
+        public UtteranceIntents(string intent, double score)
+        {
+            this.Intent = intent;
+            this.Score = score;
+        }
+
+        public string Intent { get; private set; }
+
+        public double Score { get; private set; }
 
     }
 }

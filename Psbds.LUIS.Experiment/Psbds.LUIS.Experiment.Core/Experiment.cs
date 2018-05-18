@@ -11,11 +11,15 @@ using System.Threading.Tasks;
 
 namespace Psbds.LUIS.Experiment.Core
 {
+    [Serializable]
     public class Experiment
     {
         private string _applicationId;
         private readonly string _applicationKey;
         private readonly LuisClient _luisClient;
+
+        [JsonProperty("applicationVersion")]
+        private ApplicationVersionModel _applicationVersion;
 
         public Experiment(string applicationKey)
         {
@@ -29,23 +33,23 @@ namespace Psbds.LUIS.Experiment.Core
             {
                 Console.Write($"Downloading Application Version: ");
 
-                var applicationVersion = (await _luisClient.ExportVersion(applicationId, versionId)).DeserializeObject<ApplicationVersionModel>();
+                _applicationVersion = (await _luisClient.ExportVersion(applicationId, versionId)).DeserializeObject<ApplicationVersionModel>();
 
                 ColoredConsole.WriteLine("Success", ConsoleColor.Green);
 
                 Console.Write($"Creating Experiment Application: ");
 
-                _applicationId = await this.CreateApplication(applicationVersion.Name, applicationVersion.Culture);
+                _applicationId = await this.CreateApplication(_applicationVersion.Name, _applicationVersion.Culture);
 
                 ColoredConsole.WriteLine("Success", ConsoleColor.Green);
 
-                var folds = this.SeparateFolds(applicationVersion, numberOfFolds);
+                var folds = this.SeparateFolds(_applicationVersion, numberOfFolds);
 
                 var tasks = new List<Task<string>>();
                 var index = 1;
                 foreach (var fold in folds)
                 {
-                    tasks.Add(Task.Run(async () => await RunExperiment(applicationVersion, fold, index++)));
+                    tasks.Add(Task.Run(async () => await RunExperiment(_applicationVersion, fold, index++)));
                 }
 
                 Task.WaitAll(tasks.ToArray());
@@ -73,32 +77,28 @@ namespace Psbds.LUIS.Experiment.Core
             }
         }
 
-        public List<ConfusionMatrixModel> CreateConfusionMatrix(List<TestResultModel[]> foldResults)
+        public ConfusionMatrixAnalysis CreateConfusionMatrix(List<TestResultModel[]> foldResults)
         {
-            var confusionMatrix = new List<ConfusionMatrixModel>();
+            var confusionMatrix = new ConfusionMatrixAnalysis(this._applicationVersion);
 
             foreach (var testResults in foldResults)
             {
                 foreach (var utterance in testResults.Where(x => !x.IsCorrect))
                 {
-                    var confusionModel = confusionMatrix.FirstOrDefault(x => x.IntentName == utterance.IntentLabel);
+                    var confusionModel = confusionMatrix.MatrixItems.FirstOrDefault(x => x.ExpectedIntentName == utterance.IntentLabel);
                     if (confusionModel == null)
                     {
-                        confusionModel = new ConfusionMatrixModel(utterance.IntentLabel);
-                        confusionMatrix.Add(confusionModel);
+                        confusionModel = new MatrixItem(confusionMatrix, utterance.IntentLabel);
+                        confusionMatrix.MatrixItems.Add(confusionModel);
                     }
-                    var confusion = confusionModel.Confusions.FirstOrDefault(x => x.IntentName == utterance.FirstIntent.Name);
+                    var confusion = confusionModel.Confusions.FirstOrDefault(x => x.FoundIntent == utterance.FirstIntent.Name);
                     if (confusion == null)
                     {
-                        confusion = new ConfusionMatrixItemModel(utterance.FirstIntent.Name);
+                        confusion = new Confusion(confusionModel, utterance.FirstIntent.Name);
                         confusionModel.Confusions.Add(confusion);
                     }
-                    confusion.Utterances.Add(new ConfusionMatrixItemUtteranceModel(utterance.IntentLabel)
-                    {
-                        Text = utterance.Text,
-                        Score = utterance.FirstIntent.Score
-                    });
-                    confusion.Count++;
+                    var predictions = utterance.IntentPredictions.OrderByDescending(x => x.Score).Take(10).Select(x => new UtteranceIntents(x.Name, x.Score)).ToList();
+                    confusion.Utterances.Add(new Utterance(confusion, utterance.Text, utterance.TokenizedText, utterance.FirstIntent.Score,predictions));
                 }
             }
 
@@ -159,7 +159,7 @@ namespace Psbds.LUIS.Experiment.Core
         {
             var utterancesByIntent = new List<ApplicationVersionUtteranceModel>(model.Utterances).GroupBy(x => x.Intent);
             utterancesByIntent.Where(x => x.Count() < ignoreLessThan).ToList().ForEach(x => Console.WriteLine($"Ignored Intent #{x.Key}: {x.Count()} Values"));
-            utterancesByIntent = utterancesByIntent.Where(x => x.Count() >= ignoreLessThan);
+            utterancesByIntent = utterancesByIntent.Where(x => x.Count() > ignoreLessThan);
             return utterancesByIntent.SelectMany(x => x);
         }
 
