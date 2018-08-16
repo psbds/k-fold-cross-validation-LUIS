@@ -40,7 +40,6 @@ namespace Psbds.LUIS.Experiment.Core.Model
         [JsonProperty("prebuiltEntities")]
         public object[] PrebuiltEntities { get; set; }
 
-
         [JsonProperty("bing_entities")]
         public string[] BingEntities { get; set; }
 

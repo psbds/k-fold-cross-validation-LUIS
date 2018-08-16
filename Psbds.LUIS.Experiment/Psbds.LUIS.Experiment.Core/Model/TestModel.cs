@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 
 namespace Psbds.LUIS.Experiment.Core.Model
 {
+    [Serializable]
     public class TestModel
     {
         public int FoldIndex { get; set; }

@@ -4,6 +4,7 @@ using System.Text;
 
 namespace Psbds.LUIS.Experiment.Core.Model
 {
+    [Serializable]
     public class FoldModel
     {
 

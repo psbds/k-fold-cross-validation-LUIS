@@ -164,6 +164,7 @@ namespace Psbds.LUIS.Experiment.Core.Model
 
     }
 
+    [Serializable]
     public static class TestResultModelExtensions
     {
 

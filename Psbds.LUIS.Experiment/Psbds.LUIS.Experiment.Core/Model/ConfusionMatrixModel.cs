@@ -6,6 +6,7 @@ using System.Text;
 
 namespace Psbds.LUIS.Experiment.Core.Model
 {
+    [Serializable]
     public class ConfusionMatrixAnalysis
     {
 
@@ -22,6 +23,7 @@ namespace Psbds.LUIS.Experiment.Core.Model
 
     }
 
+    [Serializable]
     public class MatrixItem
     {
         public MatrixItem(ConfusionMatrixAnalysis matrixAnalysis, string expectedIntentName)
@@ -121,6 +123,7 @@ namespace Psbds.LUIS.Experiment.Core.Model
         }
     }
 
+    [Serializable]
     public class TokenizedAnalysis
     {
 
