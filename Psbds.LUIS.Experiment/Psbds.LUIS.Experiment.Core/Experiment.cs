@@ -50,6 +50,7 @@ namespace Psbds.LUIS.Experiment.Core
                 foreach (var fold in folds)
                 {
                     tasks.Add(Task.Run(async () => await RunExperiment(_applicationVersion, fold, index++)));
+                    Thread.Sleep(1000);
                 }
 
                 Task.WaitAll(tasks.ToArray());
