@@ -37,7 +37,7 @@ namespace Psbds.LUIS.Experiment.Console
             stopWatch.Start();
 
             var experiment = new Core.Experiment(appKey);
-            var experimentResults = experiment.RunExperiment(appId, appVersion, 5).Result;
+            var experimentResults = experiment.RunExperiment(appId, appVersion, true, 5).Result;
 
             stopWatch.Stop();
 

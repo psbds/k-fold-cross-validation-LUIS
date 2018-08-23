@@ -27,7 +27,7 @@ namespace Psbds.LUIS.Experiment.Core
             this._luisClient = new LuisClient(applicationKey);
         }
 
-        public async Task<List<TestResultModel[]>> RunExperiment(string applicationId, string versionId, int numberOfFolds = 5)
+        public async Task<List<TestResultModel[]>> RunExperiment(string applicationId, string versionId, bool stratified, int numberOfFolds = 5)
         {
             try
             {
@@ -43,7 +43,9 @@ namespace Psbds.LUIS.Experiment.Core
 
                 ColoredConsole.WriteLine("Success", ConsoleColor.Green);
 
-                var folds = this.SeparateFolds(_applicationVersion, numberOfFolds);
+                FoldFactory foldFactory = stratified ? new FoldFactoryStratified() as FoldFactory : new FoldFactoryCluster() as FoldFactory;
+
+                var folds = foldFactory.SeparateFolds(_applicationVersion.Utterances, numberOfFolds);
 
                 var tasks = new List<Task<string>>();
                 var index = 1;
@@ -54,8 +56,6 @@ namespace Psbds.LUIS.Experiment.Core
                 }
 
                 Task.WaitAll(tasks.ToArray());
-
-
 
                 return tasks.Select(x => x.Result.DeserializeObject<TestResultModel[]>()).ToList();
             }
@@ -99,7 +99,7 @@ namespace Psbds.LUIS.Experiment.Core
                         confusionModel.Confusions.Add(confusion);
                     }
                     var predictions = utterance.IntentPredictions.OrderByDescending(x => x.Score).Take(10).Select(x => new UtteranceIntents(x.Name, x.Score)).ToList();
-                    confusion.Utterances.Add(new Utterance(confusion, utterance.Text, utterance.TokenizedText, utterance.FirstIntent.Score,predictions));
+                    confusion.Utterances.Add(new Utterance(confusion, utterance.Text, utterance.TokenizedText, utterance.FirstIntent.Score, predictions));
                 }
             }
 
@@ -136,45 +136,6 @@ namespace Psbds.LUIS.Experiment.Core
                 throw;
             }
         }
-
-        #region [ Creating Folds ]
-
-        private List<FoldModel> SeparateFolds(ApplicationVersionModel model, int numberOfFolds)
-        {
-            var folds = CreateFolds(numberOfFolds);
-
-            var utterancesByIntent = ExtractUtterancesForFolds(model, 0).OrderBy(x => new Guid().ToString());
-
-            var values = utterancesByIntent.Split(numberOfFolds);
-            for (var i = 0; i < numberOfFolds; i++)
-            {
-                var fold = folds[i];
-                fold.TestSet.AddRange(values.ElementAt(i).ToList());
-
-                folds.Where(x => x != fold).ToList().ForEach(x => x.TrainingSet.AddRange(values.ElementAt(i)));
-            }
-            return folds;
-        }
-
-        private IEnumerable<ApplicationVersionUtteranceModel> ExtractUtterancesForFolds(ApplicationVersionModel model, int ignoreLessThan)
-        {
-            var utterancesByIntent = new List<ApplicationVersionUtteranceModel>(model.Utterances).GroupBy(x => x.Intent);
-            utterancesByIntent.Where(x => x.Count() < ignoreLessThan).ToList().ForEach(x => Console.WriteLine($"Ignored Intent #{x.Key}: {x.Count()} Values"));
-            utterancesByIntent = utterancesByIntent.Where(x => x.Count() > ignoreLessThan);
-            return utterancesByIntent.SelectMany(x => x);
-        }
-
-        private List<FoldModel> CreateFolds(int numberOfFolds)
-        {
-            var list = new List<FoldModel>();
-            for (var i = 0; i < numberOfFolds; i++)
-            {
-                list.Add(new FoldModel());
-            }
-            return list;
-        }
-
-        #endregion
 
         private async Task<string> ImportFoldVersion(ApplicationVersionModel applicationVersion, FoldModel fold, string versionName)
         {
