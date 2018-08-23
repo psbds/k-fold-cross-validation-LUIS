@@ -1,13 +1,16 @@
 ﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Psbds.LUIS.Experiment.Console.HtmlResult;
 using Psbds.LUIS.Experiment.Core;
 using Psbds.LUIS.Experiment.Core.Helpers;
 using Psbds.LUIS.Experiment.Core.Model;
+using RazorLight;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -16,7 +19,7 @@ using System.Threading.Tasks;
 
 namespace Psbds.LUIS.Experiment.Console
 {
-    class Program
+    public class Program
     {
         public static string appId;
         public static string appKey;
@@ -44,7 +47,6 @@ namespace Psbds.LUIS.Experiment.Console
             var count = 0;
             var utterancesFile = new StringBuilder();
             utterancesFile.AppendLine("correct;utterance;expected_intent;first_intent;second_intent");
-            var accuracies = new List<double>();
             foreach (var result in experimentResults)
             {
                 var resultList = result.ToList();
@@ -78,7 +80,9 @@ namespace Psbds.LUIS.Experiment.Console
 
             var confusionMatrix = experiment.CreateConfusionMatrix(experimentResults);
 
-            WriteConfusionHtmlFile(confusionMatrix);
+            var htmlTemplateBuilder = new HtmlTemplateBuilder(confusionMatrix, experimentResults);
+            htmlTemplateBuilder.Build();
+            htmlTemplateBuilder.WriteToFile(directory, $"ExperimentResults-{DateTime.Now.ToString().CleanFileName()}.html");
 
             WriteConfusionFile(confusionMatrix.MatrixItems);
 
@@ -91,6 +95,7 @@ namespace Psbds.LUIS.Experiment.Console
 
         private static void WriteConfusionFile(List<MatrixItem> confusionMatrix)
         {
+
             var confusionFile = new StringBuilder();
             confusionFile.AppendLine("confusion_count;intent;confusions");
             foreach (var intent in confusionMatrix.OrderByDescending(x => x.Confusions.Count))
@@ -103,93 +108,15 @@ namespace Psbds.LUIS.Experiment.Console
                 confusionFile.AppendLine(line);
             }
 
-            using (var writer = new StreamWriter($"{directory}/ConfusionMatrix-{DateTime.Now.ToString().CleanFileName()}.csv", false, Encoding.UTF8))
+            using (var writer = new StreamWriter($"{directory}/ConfusionMatrix-{DateTime.Now.ToString().CleanFileName()}.csv", false, System.Text.Encoding.UTF8))
             {
                 writer.Write(confusionFile);
             }
         }
 
-        private static void WriteConfusionHtmlFile(ConfusionMatrixAnalysis confusionMatrix)
-        {
-
-            var templateFilePath = Path.Combine(AppContext.BaseDirectory, "templates", "results.html");
-            string templateFile = File.ReadAllText(templateFilePath, Encoding.UTF8);
-
-
-            var maxConfusions = confusionMatrix.MatrixItems.Max(x => x.Confusions.Count);
-
-            var confusionColumns = new StringBuilder();
-            var confusionHeaders = new StringBuilder();
-            for (var i = 0; i < maxConfusions; i++)
-            {
-                confusionHeaders.AppendLine($"<th style='width:150px !important;'>intent_{i + 1}</th>");
-                confusionColumns.AppendLine(JsonConvert.SerializeObject(new { data = $"intent_{i + 1}" }) + ",");
-            }
-            templateFile = templateFile.Replace("#CONFUSION_COLUMNS#", confusionColumns.ToString());
-            templateFile = templateFile.Replace("#CONFUSION_HEADERS#", confusionHeaders.ToString());
-
-            Func<Utterance, string> FormatUtterance = (item) =>
-             {
-                 var words = item.Text.Split(' ');
-                 var tokenAnalysis = item.TokenizedAnalysis;
-                 var falsePositiveIcon = item.FalsePosiive ? "<span class='badge badge-warning'><i class='fa fa-ban'></i></span>" : "";
-                 var phrase = String.Join(" ", words.Select(word =>
-                 {
-                     var apperance = tokenAnalysis.FirstOrDefault(x => x.Token == word);
-                     if (apperance != null)
-                     {
-                         var color = apperance.ApperancesInExpectedIntent <= 1 ? "style='color: orange;'" : "";
-                         return $"<span data-toggle='tooltip' {color} data-placement='bottom' title='{apperance.ApperancesInExpectedIntent}({apperance.PercentageInExpectedIntent.ToString("F2")}%) Occurences in Expected Intent | {apperance.ApperancesInFoundIntent}({apperance.PercentageInFoundIntent.ToString("F2")}%) Occurences in Found Intent'>{word}</span>";
-                     }
-                     else
-                     {
-                         return word;
-                     }
-                 }));
-                 phrase = falsePositiveIcon + phrase + $"({item.Score})";
-                 return phrase;
-             };
-
-            var data = confusionMatrix.MatrixItems.Select(x =>
-            {
-                JObject model = new JObject();
-                model["id"] = x.ExpectedIntentName;
-                model["confusions"] = x.Confusions.Sum(y => y.Utterances.Count);
-                model["expected_intent"] = x.ExpectedIntentName;
-                var orderedConfusions = x.Confusions.OrderByDescending(c => c.Utterances.Count).ToList();
-                for (var i = 0; i < maxConfusions; i++)
-                {
-                    var examples = new JArray(orderedConfusions.Count > i ? orderedConfusions[i].Utterances.Select(FormatUtterance).ToArray() : new string[] { });
-                    var examplesData = JArray.FromObject(orderedConfusions.Count > i ? orderedConfusions[i].Utterances.ToArray() : new object[] { });
-                    model.Add("examples_intent_" + (i + 1), examples);
-                    model.Add("examples_data_intent_" + (i + 1), examplesData);
-                    model["intent_" + (i + 1)] = orderedConfusions.Count > i ? $"{orderedConfusions[i].FoundIntent} ({orderedConfusions[i].Utterances.Count})" : "-";
-                }
-
-                return model;
-            });
-
-            templateFile = templateFile.Replace("#DATA#", JsonConvert.SerializeObject(data));
-
-
-            var intents = new JObject();
-            confusionMatrix.ApplicationVersion.Utterances.GroupBy(x => x.Intent).ToList().ForEach(item =>
-            {
-                intents.Add(item.Key, new JArray(item.Select(x => x.Text).ToArray()));
-            });
-
-            templateFile = templateFile.Replace("#INTENTS#", JsonConvert.SerializeObject(intents));
-
-            using (var writer = new StreamWriter($"{directory}/ConfusionMatrix-{DateTime.Now.ToString().CleanFileName()}.html", false, Encoding.UTF8))
-            {
-                writer.Write(templateFile);
-            }
-
-        }
-
         private static void WriteUtterancesFile(string utterancesFile)
         {
-            using (var writer = new StreamWriter($"{directory}/ExperimentResults-{DateTime.Now.ToString().CleanFileName()}.csv", false, Encoding.UTF8))
+            using (var writer = new StreamWriter($"{directory}/ExperimentResults-{DateTime.Now.ToString().CleanFileName()}.csv", false, System.Text.Encoding.UTF8))
             {
                 writer.Write(utterancesFile);
             }

@@ -1,34 +1,44 @@
-﻿<!DOCTYPE html>
-<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
-<head>
-    <meta charset="utf-8" />
-    <title></title>
-
-
-    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.0/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-9gVQ4dYFwwWSjIDZnLEWnxCjeSWFphJiwGPXr1jddIhOegiu1FwO5qRGvFXOdJZ4" crossorigin="anonymous">
-    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/v/dt/dt-1.10.16/datatables.min.css" />
-    <link href="https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet" integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous">
-
-    <script src="http://code.jquery.com/jquery-3.3.1.js" integrity="sha256-2Kok7MbOyxpgUVvAk/HJ2jigOSYS2auK4Pfzbm7uH60=" crossorigin="anonymous"></script>
-    <script type="text/javascript" src="https://cdn.datatables.net/v/dt/dt-1.10.16/datatables.min.js"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.0/js/bootstrap.bundle.min.js" integrity="sha384-lZmvU/TzxoIQIOD9yQDEpvxp6wEU32Fy0ckUgOH4EIlMOCdR823rg4+3gWRwnX1M" crossorigin="anonymous"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mark.js/8.11.1/jquery.mark.min.js"></script>
-</head>
-<body style="padding:30px;">
-    <div class="container-fluid">
-        <h3>Experiment Results <hr /></h3>
-        <table id="example" class="display" style="width:100%">
-            <thead>
-                <tr>
-                    <th width="30px">#</th>
-                    <th width="50px">Confusions</th>
-                    <th width="300px">Expected Intent</th>
-                    #CONFUSION_HEADERS#
-                </tr>
-            </thead>
-        </table>
+﻿@model Psbds.LUIS.Experiment.Console.HtmlTemplateModel
+@using Newtonsoft.Json;
+@{
+    DisableEncoding = true;
+}
+@using RazorLight
+@inherits TemplatePage<Psbds.LUIS.Experiment.Console.HtmlTemplateModel>
+<div class="tab tab-errors container-fluid">
+    <table id="example" class="display" style="width:100%">
+        <thead>
+            <tr>
+                <th width="30px">#</th>
+                <th width="50px">Confusions</th>
+                <th width="300px">Expected Intent</th>
+                @for (var i = 0; i < Model.ErrorTab.MaxConfusions; i++)
+                {
+                    <th style='width:150px !important;'>intent_@(i + 1)</th>
+                }
+            </tr>
+        </thead>
+    </table>
+</div>
+<div class="modal modal-comparison" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Intent Comparison</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
     </div>
-    <script>
+</div>
+
+<script>
         var phrases = {};
         function generateGuid() {
             function s4() {
@@ -84,11 +94,13 @@
                     },
                     { "data": "confusions" },
                     { "data": "expected_intent" },
-            #CONFUSION_COLUMNS#
-                                            ],
+                    @for (var i = 0; i < Model.ErrorTab.MaxConfusions; i++){
+                    @: {"data": "intent_@(i+1)"},
+                    }
+                                                ],
             "order": [[1, 'asc']],
-            "data": #DATA#
-                                        });
+                "data": @JsonConvert.SerializeObject(Model.ErrorTab.Errors)
+        });
 
         // Add event listener for opening and closing details
         $('#example tbody').on('click', 'td.details-control', function () {
@@ -106,9 +118,9 @@
                 tr.addClass('shown');
             }
         });
-                    });
+                        });
 
-        var intents = #INTENTS#;
+        var intents = @JsonConvert.SerializeObject(Model.ErrorTab.Intents);
 
         function openComparison(expected, found, guid) {
             var data = phrases[guid];
@@ -137,29 +149,6 @@
             $(".modal-comparison").modal("show");
             setTimeout(function () {
                 $('[data-toggle="tooltip"]').tooltip();
-            },3000);
+            }, 3000);
         }
-    </script>
-    <div class="modal modal-comparison" tabindex="-1" role="dialog">
-        <div class="modal-dialog modal-lg" role="document">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Intent Comparison</h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
-                </div>
-                <div class="modal-body">
-
-
-
-
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-                </div>
-            </div>
-        </div>
-    </div>
-</body>
-</html>
+</script>

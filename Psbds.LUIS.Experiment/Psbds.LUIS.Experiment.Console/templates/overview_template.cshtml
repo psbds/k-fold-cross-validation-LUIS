@@ -1,0 +1,92 @@
+﻿@model Psbds.LUIS.Experiment.Console.HtmlTemplateModel
+@using Newtonsoft.Json;
+@{
+    DisableEncoding = true;
+}
+@using RazorLight
+@inherits TemplatePage<Psbds.LUIS.Experiment.Console.HtmlTemplateModel>
+<div class="tab tab-overview container-fluid">
+    <div class="overview" style="display: inline-block;">
+        <h3>
+            Average Accuracy
+            <hr />
+            <h1>
+                @Model.OverviewTab.AverageAccuracy.AccuracyAt1.ToString("F2")%
+            </h1>
+        </h3>
+        <h3>
+            Average Precision
+            <hr />
+            <h1>
+                @Model.OverviewTab.AveragePrecision.ToString("F2")%
+            </h1>
+        </h3>
+    </div>
+    <div style="width:400px;height:500px;display:inline-block;vertical-align:middle">
+        <canvas id="accuracy-chart-average" width="400" height="400"></canvas>
+    </div>
+    @for (var i = 0; i < Model.OverviewTab.AccuraciesPerTest.Count; i++)
+    {
+        <div style="width:200px;height:300px;display: inline-block;vertical-align:middle">
+            <canvas id="accuracy-chart-@i" width="200" height="300"></canvas>
+        </div>
+    }
+</div>
+<script>
+    function loadChart(accuracyResult, containerId, name) {
+        var ctx = document.getElementById(containerId).getContext("2d");
+        var data = {
+            labels: [
+                accuracyResult[0].toFixed(2),
+                accuracyResult[1].toFixed(2),
+                accuracyResult[2].toFixed(2),
+                accuracyResult[3].toFixed(2),
+                accuracyResult[4].toFixed(2)
+            ],
+            datasets: [
+                {
+                    label: "Accuracy at K",
+                    data: accuracyResult,
+                    backgroundColor: "rgba(80, 168, 245, 1)"
+                }
+            ]
+        };
+        var options = {
+            responsive: true,
+            title: {
+                display: true,
+                position: "top",
+                text: name,
+                fontSize: 18,
+                fontColor: "#111"
+            },
+            legend: {
+                display: true,
+                position: "bottom",
+                labels: {
+                    fontColor: "#333",
+                    fontSize: 16
+                }
+            },
+            scales: {
+                yAxes: [{
+                    ticks: {
+                        min: 0
+                    }
+                }]
+            }
+        };
+        var chart = new Chart(ctx, {
+            type: "bar",
+            data: data,
+            options: options
+        });
+    }
+
+    $(document).ready(function () {
+        loadChart(@JsonConvert.SerializeObject(Model.OverviewTab.AverageAccuracy.AsArray), "accuracy-chart-average","Average")
+        @for(var i = 0;i<Model.OverviewTab.AccuraciesPerTest.Count;i++){
+            @: loadChart(@JsonConvert.SerializeObject(Model.OverviewTab.AccuraciesPerTest[i].AsArray), "accuracy-chart-@i","Test @i")
+        }
+    })
+</script>

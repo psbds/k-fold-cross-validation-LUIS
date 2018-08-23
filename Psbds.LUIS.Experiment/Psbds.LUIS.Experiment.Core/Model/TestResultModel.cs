@@ -31,7 +31,6 @@ namespace Psbds.LUIS.Experiment.Core.Model
         [JsonProperty("intentPredictions")]
         public TestResultIntentModel[] IntentPredictions { get; set; }
 
-
         [JsonIgnore]
         public TestResultIntentModel FirstIntent
         {
@@ -123,8 +122,6 @@ namespace Psbds.LUIS.Experiment.Core.Model
                 return IntentLabel == FifthIntent?.Name;
             }
         }
-
-
 
     }
 
