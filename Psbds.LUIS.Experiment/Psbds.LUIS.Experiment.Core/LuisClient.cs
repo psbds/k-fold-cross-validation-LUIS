@@ -82,22 +82,14 @@ namespace Psbds.LUIS.Experiment.Core
 
         private async Task<String> SendPostRequest(string path, object body)
         {
-            try
+            var json = JsonConvert.SerializeObject(body);
+            var result = await httpClient.PostAsync(path, new StringContent(json, Encoding.UTF8, "application/json"));
+            var content = await result.Content.ReadAsStringAsync();
+            if (!result.IsSuccessStatusCode)
             {
-                var json = JsonConvert.SerializeObject(body);
-                var result = await httpClient.PostAsync(path, new StringContent(json, Encoding.UTF8, "application/json"));
-                var content = await result.Content.ReadAsStringAsync();
-                if (!result.IsSuccessStatusCode)
-                {
-                    throw new Exception(content);
-                }
-                return content;
-
+                throw new Exception(content);
             }
-            catch (Exception e)
-            {
-                throw e;
-            }
+            return content;
         }
 
         public void Dispose()
