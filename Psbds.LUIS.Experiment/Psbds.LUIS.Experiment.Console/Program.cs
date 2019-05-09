@@ -128,7 +128,7 @@ namespace Psbds.LUIS.Experiment.Console
             templateFile = templateFile.Replace("#CONFUSION_COLUMNS#", confusionColumns.ToString());
             templateFile = templateFile.Replace("#CONFUSION_HEADERS#", confusionHeaders.ToString());
 
-            Func<Utterance, string> FormatUtterance = (item) =>
+            Func<ConfusionMatrixUtterance, string> FormatUtterance = (item) =>
              {
                  var words = item.Text.Split(' ');
                  var tokenAnalysis = item.TokenizedAnalysis;

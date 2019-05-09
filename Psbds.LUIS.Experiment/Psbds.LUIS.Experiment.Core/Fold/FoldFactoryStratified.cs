@@ -1,5 +1,6 @@
 ﻿using Psbds.LUIS.Experiment.Core.Helpers;
 using Psbds.LUIS.Experiment.Core.Model;
+using Psbds.LUIS.Experiment.Core.Model.LuisApplication;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,7 +10,7 @@ namespace Psbds.LUIS.Experiment.Core
 {
     public class FoldFactoryStratified : FoldFactory
     {
-        public override List<FoldModel> SeparateFolds(ApplicationVersionUtteranceModel[] modelUtterances, int numberOfFolds)
+        public override List<FoldModel> SeparateFolds(Utterance[] modelUtterances, int numberOfFolds)
         {
             var folds = CreateFolds(numberOfFolds);
 
@@ -29,9 +30,9 @@ namespace Psbds.LUIS.Experiment.Core
             return folds;
         }
 
-        private IEnumerable<IGrouping<string, ApplicationVersionUtteranceModel>> GroupAndShuffle(ApplicationVersionUtteranceModel[] modelUtterances, int ignoreLessThan)
+        private IEnumerable<IGrouping<string, Utterance>> GroupAndShuffle(Utterance[] modelUtterances, int ignoreLessThan)
         {
-            var utterancesByIntent = new List<ApplicationVersionUtteranceModel>(modelUtterances)
+            var utterancesByIntent = new List<Utterance>(modelUtterances)
                 .GroupBy(x => x.Intent)
                 .Where(x => x.Count() >= ignoreLessThan)
                 .OrderBy(x => new Guid().ToString());

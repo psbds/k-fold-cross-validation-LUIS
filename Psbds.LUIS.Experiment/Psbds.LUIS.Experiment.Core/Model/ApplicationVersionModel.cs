@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Newtonsoft.Json;
+using Psbds.LUIS.Experiment.Core.Model.LuisApplication;
 
 namespace Psbds.LUIS.Experiment.Core.Model
 {
@@ -50,13 +51,13 @@ namespace Psbds.LUIS.Experiment.Core.Model
         public string[] RegexFeatures { get; set; }
 
         [JsonProperty("utterances")]
-        public ApplicationVersionUtteranceModel[] Utterances { get; set; }
+        public Utterance[] Utterances { get; set; }
 
         [JsonIgnore]
-        private IEnumerable<IGrouping<string, ApplicationVersionUtteranceModel>> _utterancesByIntent;
+        private IEnumerable<IGrouping<string, Utterance>> _utterancesByIntent;
 
         [JsonIgnore]
-        public IEnumerable<IGrouping<string, ApplicationVersionUtteranceModel>> UtterancesByIntent
+        public IEnumerable<IGrouping<string, Utterance>> UtterancesByIntent
         {
             get
             {
@@ -136,22 +137,7 @@ namespace Psbds.LUIS.Experiment.Core.Model
     }
 
     [Serializable]
-    public class ApplicationVersionUtteranceModel
-    {
-
-        [JsonProperty("text")]
-        public string Text { get; set; }
-
-        [JsonProperty("intent")]
-        public string Intent { get; set; }
-
-        [JsonProperty("entities")]
-        public ApplicationVersionUtteranceEntityModel[] Entities { get; set; }
-
-    }
-
-    [Serializable]
-    public class ApplicationVersionUtteranceEntityModel
+    public class UtteranceEntity
     {
         [JsonProperty("entity")]
         public string Entity { get; set; }

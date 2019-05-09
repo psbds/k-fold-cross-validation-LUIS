@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Psbds.LUIS.Experiment.Core.Model.LuisApplication;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
@@ -8,9 +9,9 @@ namespace Psbds.LUIS.Experiment.Core.Model
     public class FoldModel
     {
 
-        public List<ApplicationVersionUtteranceModel> TrainingSet { get; set; } = new List<ApplicationVersionUtteranceModel>();
+        public List<Utterance> TrainingSet { get; set; } = new List<Utterance>();
 
-        public List<ApplicationVersionUtteranceModel> TestSet { get; set; } = new List<ApplicationVersionUtteranceModel>();
+        public List<Utterance> TestSet { get; set; } = new List<Utterance>();
 
     }
 }

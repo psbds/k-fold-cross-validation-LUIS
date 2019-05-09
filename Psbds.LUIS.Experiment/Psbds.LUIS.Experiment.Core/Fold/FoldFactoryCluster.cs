@@ -1,5 +1,7 @@
-﻿using Psbds.LUIS.Experiment.Core.Helpers;
+﻿using Psbds.LUIS.Experiment.Core.Exceptions;
+using Psbds.LUIS.Experiment.Core.Helpers;
 using Psbds.LUIS.Experiment.Core.Model;
+using Psbds.LUIS.Experiment.Core.Model.LuisApplication;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,13 +11,20 @@ namespace Psbds.LUIS.Experiment.Core
 {
     public class FoldFactoryCluster : FoldFactory
     {
-        public override List<FoldModel> SeparateFolds(ApplicationVersionUtteranceModel[] modelUtterances, int numberOfFolds)
+        public override List<FoldModel> SeparateFolds(Utterance[] utterances, int numberOfFolds)
         {
+            if (utterances.Length < numberOfFolds)
+            {
+                throw new NotEnoughUtterancesException("Number of Folds is Higher than the number of utterances");
+            }
+
             var folds = CreateFolds(numberOfFolds);
 
-            var utterancesByIntent = ExtractUtterancesForFolds(modelUtterances, 0).OrderBy(x => new Guid().ToString());
+            Random rnd = new Random();
 
-            var values = utterancesByIntent.Split(numberOfFolds);
+            var randomizedUtterances = utterances.ToList().OrderBy(x => rnd.Next()).ToArray();
+
+            var values = randomizedUtterances.Split(numberOfFolds);
             for (var i = 0; i < numberOfFolds; i++)
             {
                 var fold = folds[i];
@@ -24,14 +33,6 @@ namespace Psbds.LUIS.Experiment.Core
                 folds.Where(x => x != fold).ToList().ForEach(x => x.TrainingSet.AddRange(values.ElementAt(i)));
             }
             return folds;
-        }
-
-        private IEnumerable<ApplicationVersionUtteranceModel> ExtractUtterancesForFolds(ApplicationVersionUtteranceModel[] modelUtterances, int ignoreLessThan)
-        {
-            var utterancesByIntent = new List<ApplicationVersionUtteranceModel>(modelUtterances).GroupBy(x => x.Intent);
-            utterancesByIntent = utterancesByIntent.Where(x => x.Count() > ignoreLessThan);
-
-            return utterancesByIntent.SelectMany(x => x);
         }
     }
 }

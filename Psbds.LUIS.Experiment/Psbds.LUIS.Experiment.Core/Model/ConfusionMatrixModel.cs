@@ -54,14 +54,14 @@ namespace Psbds.LUIS.Experiment.Core.Model
 
         public string FoundIntent { get; private set; }
 
-        public List<Utterance> Utterances { get; private set; } = new List<Utterance>();
+        public List<ConfusionMatrixUtterance> Utterances { get; private set; } = new List<ConfusionMatrixUtterance>();
 
     }
 
     [Serializable]
-    public class Utterance
+    public class ConfusionMatrixUtterance
     {
-        public Utterance(Confusion confusion, string text, string[] tokenizedText, double score, List<UtteranceIntents> intents)
+        public ConfusionMatrixUtterance(Confusion confusion, string text, string[] tokenizedText, double score, List<UtteranceIntents> intents)
         {
             this.Confusion = confusion;
             this.Text = text;
@@ -70,7 +70,7 @@ namespace Psbds.LUIS.Experiment.Core.Model
             this.Intents = intents;
         }
 
-        public Utterance()
+        public ConfusionMatrixUtterance()
         {
 
         }

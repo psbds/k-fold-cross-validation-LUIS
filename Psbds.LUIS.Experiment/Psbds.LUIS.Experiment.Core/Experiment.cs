@@ -99,7 +99,7 @@ namespace Psbds.LUIS.Experiment.Core
                         confusionModel.Confusions.Add(confusion);
                     }
                     var predictions = utterance.IntentPredictions.OrderByDescending(x => x.Score).Take(10).Select(x => new UtteranceIntents(x.Name, x.Score)).ToList();
-                    confusion.Utterances.Add(new Utterance(confusion, utterance.Text, utterance.TokenizedText, utterance.FirstIntent.Score, predictions));
+                    confusion.Utterances.Add(new ConfusionMatrixUtterance(confusion, utterance.Text, utterance.TokenizedText, utterance.FirstIntent.Score, predictions));
                 }
             }
 
